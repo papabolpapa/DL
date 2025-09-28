@@ -1,0 +1,88 @@
+# assignment10_autoencoder_anomaly.py
+# !pip install --quiet tensorflow pandas scikit-learn matplotlib
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix
+
+# ---------- Load dataset ----------
+# Make sure creditcard.csv is in your working directory
+df = pd.read_csv("creditcard.csv")
+print("Dataset shape:", df.shape)
+
+# Features & Labels
+X = df.drop("Class", axis=1).values
+y = df["Class"].values   # 0 = normal, 1 = fraud
+
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Split normal vs fraud
+X_normal = X_scaled[y == 0]
+X_fraud  = X_scaled[y == 1]
+
+print("Normal samples:", X_normal.shape[0], " Fraud samples:", X_fraud.shape[0])
+
+# Train/Test split (train only on normal data)
+from sklearn.model_selection import train_test_split
+X_train, X_test_normal = train_test_split(X_normal, test_size=0.2, random_state=42)
+X_test = np.vstack([X_test_normal, X_fraud])
+y_test = np.hstack([np.zeros(len(X_test_normal)), np.ones(len(X_fraud))])
+
+print("Train shape:", X_train.shape, " Test shape:", X_test.shape)
+
+# ---------- Autoencoder ----------
+input_dim = X_train.shape[1]
+
+input_layer = tf.keras.layers.Input(shape=(input_dim,))
+encoded = tf.keras.layers.Dense(32, activation="relu")(input_layer)
+encoded = tf.keras.layers.Dense(16, activation="relu")(encoded)
+encoded = tf.keras.layers.Dense(8, activation="relu")(encoded)
+
+decoded = tf.keras.layers.Dense(16, activation="relu")(encoded)
+decoded = tf.keras.layers.Dense(32, activation="relu")(decoded)
+decoded = tf.keras.layers.Dense(input_dim, activation="linear")(decoded)
+
+autoencoder = tf.keras.Model(input_layer, decoded)
+autoencoder.compile(optimizer="adam", loss="mse")
+autoencoder.summary()
+
+# ---------- Train ----------
+history = autoencoder.fit(X_train, X_train,
+                          epochs=20,
+                          batch_size=256,
+                          shuffle=True,
+                          validation_split=0.1,
+                          verbose=2)
+
+# ---------- Reconstruction Error ----------
+reconstructions = autoencoder.predict(X_test)
+mse = np.mean(np.power(X_test - reconstructions, 2), axis=1)
+
+# Choose threshold (e.g. 95th percentile of normal errors)
+threshold = np.percentile(mse[y_test == 0], 95)
+print("Reconstruction error threshold:", threshold)
+
+# Predictions
+y_pred = (mse > threshold).astype(int)
+
+# ---------- Evaluation ----------
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, digits=4))
+
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+# ---------- Plot ----------
+plt.hist(mse[y_test==0], bins=50, alpha=0.6, label="Normal")
+plt.hist(mse[y_test==1], bins=50, alpha=0.6, label="Fraud")
+plt.axvline(threshold, color="red", linestyle="--", label="Threshold")
+plt.legend()
+plt.title("Reconstruction Error Distribution")
+plt.xlabel("MSE")
+plt.ylabel("Count")
+plt.show()
