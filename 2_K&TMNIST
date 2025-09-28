@@ -1,0 +1,81 @@
+# assignment2_mnist_mlp.py
+# Run in Colab / local. If Colab: uncomment pip installs.
+# !pip install --quiet tensorflow matplotlib scikit-learn
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import SGD, Adam
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.metrics import classification_report, confusion_matrix
+
+tf.random.set_seed(42)
+np.random.seed(42)
+
+# ---------- Load data ----------
+((trainX, trainY), (testX, testY)) = tf.keras.datasets.mnist.load_data()
+# Flatten and scale to [0,1]
+trainX = trainX.reshape((trainX.shape[0], 28*28)).astype('float32') / 255.0
+testX  = testX.reshape((testX.shape[0], 28*28)).astype('float32') / 255.0
+
+# One-hot encode labels
+lb = LabelBinarizer()
+trainY_cat = lb.fit_transform(trainY)
+testY_cat  = lb.transform(testY)
+
+# ---------- Build model ----------
+model = Sequential([
+    Dense(256, input_shape=(784,), activation='relu'),
+    Dropout(0.3),
+    Dense(128, activation='relu'),
+    Dropout(0.2),
+    Dense(10, activation='softmax')
+])
+
+# Choose optimizer: SGD or Adam
+optimizer = SGD(learning_rate=0.01, momentum=0.9)  # or Adam(learning_rate=0.001)
+
+model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+model.summary()
+
+# ---------- Train ----------
+epochs = 25
+batch_size = 128
+history = model.fit(trainX, trainY_cat, validation_split=0.15,
+                    epochs=epochs, batch_size=batch_size, verbose=2)
+
+# ---------- Evaluate ----------
+loss, acc = model.evaluate(testX, testY_cat, verbose=0)
+print(f"\nTest loss: {loss:.4f}  Test accuracy: {acc*100:.2f}%")
+
+# Predictions and classification report
+preds = model.predict(testX, batch_size=128)
+pred_labels = preds.argmax(axis=1)
+
+print("\nClassification report (test set):")
+print(classification_report(testY, pred_labels, digits=4))
+
+# Confusion matrix (optional)
+cm = confusion_matrix(testY, pred_labels)
+print("Confusion matrix shape:", cm.shape)
+
+# ---------- Plot training history ----------
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
+plt.title('Loss')
+
+plt.subplot(1,2,2)
+plt.plot(history.history['accuracy'], label='train_acc')
+plt.plot(history.history['val_accuracy'], label='val_acc')
+plt.xlabel('Epoch'); plt.ylabel('Accuracy'); plt.legend()
+plt.title('Accuracy')
+
+plt.tight_layout()
+plt.savefig('mnist_mlp_history.png')
+print("\nSaved training plot to mnist_mlp_history.png")
+plt.show()
