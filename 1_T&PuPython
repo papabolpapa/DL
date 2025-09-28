@@ -1,85 +1,102 @@
-# assignment1_tf_pytorch.py
-# Run: python assignment1_tf_pytorch.py  (or copy cells to Colab)
+# TENSORFLOW
 
-# ---------- Setup (uncomment/install if running in a fresh environment) ----------
-# !pip install --quiet tensorflow torch torchvision
-
-# ---------- TensorFlow example: Linear regression ----------
-import numpy as np
 import tensorflow as tf
+import numpy as np
+a=tf.constant(15)
+b=tf.constant(20)
+print(a*b)
 
-print("== TensorFlow linear regression example ==")
+x=np.random.rand(100).astype(np.float32)
+print(x)
 
-# Create synthetic data: y = 2x + 1 + noise
-rng = np.random.RandomState(42)
-x = rng.uniform(-1, 1, (200, 1)).astype(np.float32)
-y = (2.0 * x + 1.0 + rng.normal(scale=0.1, size=(200, 1))).astype(np.float32)
+y=0.2*x+0.2
 
-# Define a tiny model with tf.keras
-tf.random.set_seed(42)
-model_tf = tf.keras.Sequential([
-    tf.keras.layers.Dense(1, input_shape=(1,))
-])
-model_tf.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.1),
-                 loss='mse')
+W=tf.Variable(tf.random.normal([1]))
 
-# Train
-history = model_tf.fit(x, y, epochs=100, batch_size=16, verbose=0)
-w, b = model_tf.layers[0].get_weights()
-print(f"Learned parameters: weight={w.ravel()[0]:.4f}, bias={b.ravel()[0]:.4f}")
-print("Expected ~ weight=2.0 bias=1.0\n")
+b=tf.Variable(tf.zeros([1]))
 
-# ---------- PyTorch example: small classifier ----------
-print("== PyTorch simple classifier example ==")
+def mse_loss():
+    y_pred=W*x+b
+    loss=tf.reduce_mean(tf.square(y_pred-y))
+    return loss
+
+optimizer=tf.optimizers.Adam()
+
+for step in range(5000):
+    optimizer.minimize(mse_loss, var_list=[W,b])
+    if step%500==0:
+        print(step, W.numpy(),b.numpy())
+
+
+
+# PYTORCH
+
+
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from sklearn.datasets import make_moons
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+import numpy as np
+data = [
+[1,2],
+[3,4]
+]
+x_data = torch.tensor(data)
+print(type(x_data))
 
-# Create a small classification dataset
-X, Y = make_moons(n_samples=400, noise=0.15, random_state=42)
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=42)
+np_array = np.array(data)
+x_np = torch.from_numpy(np_array)
+print(x_np)
 
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train).astype(np.float32)
-X_test  = scaler.transform(X_test).astype(np.float32)
+print(type(x_np))
 
-# Convert to tensors
-tX_train = torch.tensor(X_train)
-tY_train = torch.tensor(y_train).long()
-tX_test  = torch.tensor(X_test)
-tY_test  = torch.tensor(y_test).long()
+x_ones = torch.ones_like(x_data)
+print("One Tensor: \n",x_ones)
 
-# Define model
-class SimpleNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(2, 16),
-            nn.ReLU(),
-            nn.Linear(16, 2)
-        )
-    def forward(self, x):
-        return self.net(x)
+x_rand = torch.rand_like(x_data,dtype=torch.float)
+print(x_rand)
 
-torch.manual_seed(42)
-model_torch = SimpleNet()
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model_torch.parameters(), lr=0.01)
+shape = (2,3)
+random_tensor = torch.rand(shape)
+print(random_tensor)
+print(type(random_tensor))
 
-# Train
-epochs = 120
-for epoch in range(epochs):
-    optimizer.zero_grad()
-    outputs = model_torch(tX_train)
-    loss = criterion(outputs, tY_train)
-    loss.backward()
-    optimizer.step()
+ones_tensor = torch.ones(shape)
+print(ones_tensor)
+print(type(ones_tensor))
 
-# Evaluate
-with torch.no_grad():
-    preds = model_torch(tX_test).argmax(dim=1)
-    acc = (preds == tY_test).float().mean().item()
-print(f"PyTorch classifier test accuracy: {acc*100:.2f}%")
+zeros_tensor = torch.zeros(shape)
+print(zeros_tensor)
+print(type(zeros_tensor))
+
+tensor = torch.rand(3,4)
+print(tensor)
+tensor.shape
+tensor.dtype
+tensor.device
+
+if torch.cuda.is_available():
+    tensor = tensor.to('cuda')
+    print("Device tensor is stored in ", tensor.device)
+
+
+tensor = torch.ones(4,4)
+print(tensor)
+
+
+tensor1 = torch.zeros(4,4)
+print(tensor1)
+
+tensor2 = torch.cat([tensor,tensor1])
+print(tensor2)
+
+tensor.mul(tensor1)
+tensor * tensor1
+tensor.T
+
+tensor.add_(3)
+print(tensor)
+
+t = torch.ones(5)
+print(t)
+
+n = t.numpy()
+print(n)
+print(type(n))
