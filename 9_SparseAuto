@@ -1,0 +1,71 @@
+# assignment9_sparse_autoencoder.py
+# !pip install --quiet tensorflow matplotlib numpy
+
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras import regularizers
+from tensorflow.keras import backend as K
+
+# ---------- Load MNIST ----------
+(x_train, _), (x_test, _) = tf.keras.datasets.mnist.load_data()
+x_train = x_train.astype("float32") / 255.
+x_test  = x_test.astype("float32") / 255.
+x_train = x_train.reshape((len(x_train), 28*28))
+x_test  = x_test.reshape((len(x_test), 28*28))
+
+# ---------- Sparsity regularizer ----------
+# Uses KL divergence to push average activation towards target sparsity (rho)
+class SparseRegularizer(tf.keras.regularizers.Regularizer):
+    def __init__(self, rho=0.05, beta=1.0):
+        self.rho = rho  # desired average activation
+        self.beta = beta  # weight of penalty
+
+    def __call__(self, x):
+        rho_hat = K.mean(K.sigmoid(x), axis=0)  # actual avg activation
+        rho = self.rho
+        # KL divergence: rho * log(rho/rho_hat) + (1-rho)*log((1-rho)/(1-rho_hat))
+        kl = rho * K.log(rho / (rho_hat + 1e-10)) + \
+             (1 - rho) * K.log((1 - rho) / (1 - rho_hat + 1e-10))
+        return self.beta * K.sum(kl)
+
+# ---------- Autoencoder Model ----------
+encoding_dim = 64
+
+input_img = tf.keras.layers.Input(shape=(784,))
+# Encoder with sparsity
+encoded = tf.keras.layers.Dense(encoding_dim, activation="sigmoid",
+                                activity_regularizer=SparseRegularizer(rho=0.05, beta=1.0))(input_img)
+# Decoder
+decoded = tf.keras.layers.Dense(784, activation="sigmoid")(encoded)
+
+autoencoder = tf.keras.Model(input_img, decoded)
+
+autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+autoencoder.summary()
+
+# ---------- Train ----------
+history = autoencoder.fit(x_train, x_train,
+                          epochs=20,
+                          batch_size=256,
+                          shuffle=True,
+                          validation_data=(x_test, x_test))
+
+# ---------- Reconstruct ----------
+decoded_imgs = autoencoder.predict(x_test[:10])
+
+# ---------- Plot original vs reconstructed ----------
+n = 10
+plt.figure(figsize=(20,4))
+for i in range(n):
+    # Original
+    ax = plt.subplot(2, n, i+1)
+    plt.imshow(x_test[i].reshape(28,28), cmap="gray")
+    plt.axis("off")
+
+    # Reconstruction
+    ax = plt.subplot(2, n, i+1+n)
+    plt.imshow(decoded_imgs[i].reshape(28,28), cmap="gray")
+    plt.axis("off")
+plt.suptitle("Sparse Autoencoder: Original vs Reconstructed")
+plt.show()
