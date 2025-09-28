@@ -1,0 +1,68 @@
+# assignment8_rnn_numpy.py
+import numpy as np
+
+# --------- Generate simple sequence (sine wave) ---------
+np.random.seed(42)
+timesteps = np.linspace(0, 100, 500)
+data = np.sin(timesteps)
+seq_length = 10  # number of timesteps as input
+
+def create_dataset(seq, seq_length):
+    X, y = [], []
+    for i in range(len(seq) - seq_length):
+        X.append(seq[i:i+seq_length])
+        y.append(seq[i+seq_length])
+    return np.array(X), np.array(y)
+
+X, y = create_dataset(data, seq_length)
+X = X.reshape(X.shape[0], seq_length, 1)  # (samples, timesteps, features)
+y = y.reshape(-1, 1)
+
+# --------- RNN Implementation ---------
+class SimpleRNN:
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.001):
+        self.hidden_size = hidden_size
+        self.learning_rate = learning_rate
+        # Initialize weights
+        self.Wxh = np.random.randn(input_size, hidden_size) * 0.01
+        self.Whh = np.random.randn(hidden_size, hidden_size) * 0.01
+        self.Why = np.random.randn(hidden_size, output_size) * 0.01
+        self.bh = np.zeros((1, hidden_size))
+        self.by = np.zeros((1, output_size))
+
+    def forward(self, inputs):
+        h = np.zeros((1, self.hidden_size))
+        self.hs = []
+        for x in inputs:
+            x = x.reshape(1, -1)
+            h = np.tanh(np.dot(x, self.Wxh) + np.dot(h, self.Whh) + self.bh)
+            self.hs.append(h)
+        y_pred = np.dot(h, self.Why) + self.by
+        return y_pred, h
+
+    def train(self, X, y, epochs=50):
+        for epoch in range(epochs):
+            total_loss = 0
+            for i in range(len(X)):
+                inputs, target = X[i], y[i]
+                y_pred, h = self.forward(inputs)
+                loss = (y_pred - target) ** 2
+                total_loss += loss
+
+                # Gradients (backpropagation through time - simplified)
+                dWhy = np.dot(h.T, (y_pred - target))
+                dby = y_pred - target
+                self.Why -= self.learning_rate * dWhy
+                self.by -= self.learning_rate * dby
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch}, Loss: {total_loss.mean():.6f}")
+
+# --------- Train RNN ---------
+rnn = SimpleRNN(input_size=1, hidden_size=16, output_size=1, learning_rate=0.01)
+rnn.train(X, y, epochs=100)
+
+# --------- Test prediction ---------
+test_seq = X[0]  # first sequence
+pred, _ = rnn.forward(test_seq)
+print("True next value:", y[0])
+print("Predicted next value:", pred)
