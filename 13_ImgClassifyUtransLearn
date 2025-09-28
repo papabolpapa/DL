@@ -1,0 +1,72 @@
+# Image Classification using Transfer Learning on Animal Dataset
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras import layers, models
+
+# Step 1: Dataset directories
+train_dir = "dataset/animals/train"
+val_dir   = "dataset/animals/validation"
+
+# Step 2: Data Generators
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode="nearest"
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=(224,224),
+    batch_size=32,
+    class_mode="categorical"
+)
+
+val_generator = val_datagen.flow_from_directory(
+    val_dir,
+    target_size=(224,224),
+    batch_size=32,
+    class_mode="categorical"
+)
+
+# Step 3: Load Pretrained ResNet50
+base_model = ResNet50(weights="imagenet", include_top=False, input_shape=(224,224,3))
+for layer in base_model.layers:
+    layer.trainable = False
+
+# Step 4: Add Custom Layers
+model = models.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(256, activation="relu"),
+    layers.Dropout(0.5),
+    layers.Dense(train_generator.num_classes, activation="softmax")
+])
+
+# Step 5: Compile & Train
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+              loss="categorical_crossentropy",
+              metrics=["accuracy"])
+
+history = model.fit(train_generator, epochs=10, validation_data=val_generator)
+
+# Step 6: Fine-tuning (unfreeze last few layers)
+for layer in base_model.layers[-10:]:
+    layer.trainable = True
+
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
+              loss="categorical_crossentropy",
+              metrics=["accuracy"])
+
+history_finetune = model.fit(train_generator, epochs=5, validation_data=val_generator)
+
+# Save Model
+model.save("animal_transfer_learning.h5")
+print("Model saved as animal_transfer_learning.h5")
