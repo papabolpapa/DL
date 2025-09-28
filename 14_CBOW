@@ -1,0 +1,59 @@
+# Continuous Bag of Words (CBOW) model in Keras
+import numpy as np
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Lambda, Dense
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import skipgrams
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tensorflow.keras.backend as K
+import random
+
+# Step 1: Sample text corpus
+corpus = ["the dog likes food", "the cat likes milk", "the dog likes milk", "cats and dogs are friends"]
+
+# Step 2: Tokenization
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(corpus)
+word2id = tokenizer.word_index
+id2word = {v: k for k, v in word2id.items()}
+vocab_size = len(word2id) + 1
+
+print("Vocabulary:", word2id)
+
+# Step 3: Generate training data (skip-grams)
+sequences = tokenizer.texts_to_sequences(corpus)
+sequences = [item for sublist in sequences for item in sublist]  # flatten
+
+couples, labels = skipgrams(sequences, vocab_size, window_size=2, seed=random.randint(0, 10000000))
+
+word_target, word_context = zip(*couples)
+word_target = np.array(word_target, dtype="int32")
+word_context = np.array(word_context, dtype="int32")
+labels = np.array(labels, dtype="int32")
+
+# Step 4: Define CBOW model
+embedding_dim = 50
+
+input_target = Input((1,))
+input_context = Input((1,))
+
+embedding = Embedding(vocab_size, embedding_dim, input_length=1)
+
+target_embedding = embedding(input_target)
+context_embedding = embedding(input_context)
+
+dot_product = Lambda(lambda x: K.batch_dot(x[0], x[1], axes=2))([target_embedding, context_embedding])
+dot_product = Lambda(lambda x: K.squeeze(x, axis=1))(dot_product)
+
+output = Dense(1, activation="sigmoid")(dot_product)
+
+model = Model(inputs=[input_target, input_context], outputs=output)
+model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
+model.summary()
+
+# Step 5: Train CBOW
+model.fit([word_target, word_context], labels, epochs=10, batch_size=64)
+
+# Step 6: Extract Word Vectors
+weights = model.get_layer("embedding").get_weights()[0]
+print("Word vector for 'dog':", weights[word2id["dog"]])
